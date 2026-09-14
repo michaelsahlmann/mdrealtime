@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="aiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="8"/>
+
+  <!-- Document Silhouette -->
+  <rect x="116" y="96" width="280" height="320" rx="28" fill="#1e293b" opacity="0.6"/>
+
+  <!-- Markdown Stylized Lines -->
+  <rect x="156" y="148" width="120" height="14" rx="7" fill="#64748b"/>
+  <rect x="156" y="180" width="200" height="10" rx="5" fill="#475569"/>
+  <rect x="156" y="204" width="170" height="10" rx="5" fill="#475569"/>
+
+  <!-- Symbiotic Loop (Infinity / Pulse between Human & AI) -->
+  <path d="M 176 310 C 140 280, 140 240, 176 210 C 212 180, 246 340, 282 310 C 318 280, 354 280, 354 310 C 354 340, 318 340, 282 310 C 246 280, 212 340, 176 310 Z"
+        fill="none" stroke="url(#accentGrad)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+
+  <!-- Live Pulse Nodes -->
+  <circle cx="176" cy="310" r="14" fill="#34d399"/>
+  <circle cx="354" cy="310" r="14" fill="#60a5fa"/>
+
+  <!-- Live Broadcast Ripple Ring -->
+  <circle cx="390" cy="120" r="16" fill="#10b981" filter="url(#glow)"/>
+  <circle cx="390" cy="120" r="28" fill="none" stroke="#10b981" stroke-width="4" opacity="0.4"/>
+</svg>

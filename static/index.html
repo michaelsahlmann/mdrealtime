@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark" data-highlight-color="green">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SymbioLive — Real-Time Human-AI Markdown Environment</title>
+  <link rel="stylesheet" href="/static/reader.css">
+</head>
+<body>
+
+  <!-- Top App Header Wrapper -->
+  <div class="header-wrapper">
+    <!-- Document Tabs -->
+    <div class="tab-bar" id="tab-bar">
+      <!-- Tabs injected via JS -->
+      <div class="tab-add" id="btn-add-tab" title="Abrir otro archivo Markdown...">+</div>
+    </div>
+
+    <!-- Actions & Controls -->
+    <header class="app-header">
+      <div class="file-info">
+        <span class="svg-icon file-icon" id="file-icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+        </span>
+        <span class="file-name" id="file-name">Cargando...</span>
+        <div class="path-chip" id="path-chip" title="Clic para copiar la ruta completa">
+          <span class="path-chip-text" id="path-chip-text">---</span>
+          <button type="button" class="btn-copy-chip" id="btn-copy-chip" title="Copiar ruta para otras IA" aria-label="Copiar ruta">
+            <span id="copy-chip-icon">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+            </span>
+          </button>
+        </div>
+        <span class="status-pill" id="status-pill">Conectando...</span>
+        <span class="lock-badge" id="lock-badge" style="display: none;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span id="lock-badge-text">Bloqueado contra la IA</span>
+        </span>
+        <span class="save-indicator saved" id="save-indicator" title="Último guardado">
+          <svg class="save-check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="save-indicator-text">Guardado</span>
+          <span class="save-time" id="save-time"></span>
+        </span>
+        <button type="button" class="btn-refresh" id="btn-refresh" title="Recargar y sincronizar (Ctrl+R)" aria-label="Recargar">
+          <svg class="refresh-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/>
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+            <path d="M16 21h5v-5"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="actions-group">
+        <!-- Mark Read Button -->
+        <button class="btn btn-primary" id="btn-mark-read" style="display: none;" title="Limpiar marcas y fijar base (Espacio o R)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="btn-mark-read-text">Marcar leído</span>
+          <span class="kbd-hint">Espacio</span>
+        </button>
+
+        <!-- Save Button (Visible when changes exist) -->
+        <button class="btn btn-save" id="btn-save" style="display: none;" title="Guardar cambios y desbloquear para la IA (Ctrl+S)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>
+          <span id="btn-save-text">Guardar</span>
+          <span class="kbd-hint">Ctrl+S</span>
+        </button>
+
+        <!-- Settings Button -->
+        <button class="btn" id="btn-settings" title="Ajustes de lectura y autoguardado (Tecla S)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span id="btn-settings-text">Ajustes</span>
+        </button>
+
+        <!-- Close Button -->
+        <button class="btn btn-close-app" id="btn-close-app" title="Cerrar ventana (Ctrl+Q)" aria-label="Cerrar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span id="btn-close-app-text">Cerrar</span>
+        </button>
+      </div>
+
+      <!-- Settings Dropdown -->
+      <div class="settings-menu" id="settings-menu">
+        <div class="setting-row">
+          <label class="setting-label" for="select-lang" id="lbl-lang">Idioma y Diccionario</label>
+          <select class="setting-select" id="select-lang">
+            <option value="es" selected>Español (Latinoamérica / PY)</option>
+            <option value="pt-BR">Português (Brasil)</option>
+            <option value="en-US">English (United States)</option>
+          </select>
+        </div>
+
+        <div class="setting-row setting-row-inline">
+          <label class="setting-label" for="chk-spellcheck" id="lbl-spellcheck" style="cursor: pointer;">Corrector ortográfico</label>
+          <input type="checkbox" id="chk-spellcheck" checked style="cursor: pointer; accent-color: var(--accent); width: 16px; height: 16px;">
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 2px 0;">
+
+        <div class="setting-row">
+          <label class="setting-label" for="select-font" id="lbl-font">Tipografía</label>
+          <select class="setting-select" id="select-font">
+            <option value="Literata">Literata (Estilo Zettlr)</option>
+            <option value="Merriweather">Merriweather (Serif)</option>
+            <option value="Inter">Inter (Sans-Serif)</option>
+            <option value="system-ui, -apple-system, sans-serif">Sistema Sans</option>
+            <option value="Georgia, serif">Georgia (Elegante)</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <label class="setting-label" for="select-font-size" id="lbl-font-size">Tamaño de letra</label>
+          <select class="setting-select" id="select-font-size">
+            <option value="15px">15px (Compacto)</option>
+            <option value="16px">16px (Normal)</option>
+            <option value="18px" selected>18px (Lectura cómoda)</option>
+            <option value="20px">20px (Grande)</option>
+            <option value="22px">22px (Extra grande)</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <label class="setting-label" for="select-width" id="lbl-width">Ancho del documento</label>
+          <select class="setting-select" id="select-width">
+            <option value="680px">Estrecho (680px)</option>
+            <option value="820px" selected>Estándar (820px)</option>
+            <option value="1000px">Amplio (1000px)</option>
+            <option value="92%">Ancho completo</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <label class="setting-label" id="lbl-theme">Tema visual</label>
+          <div class="theme-options">
+            <button type="button" class="theme-btn active" data-theme="dark" id="btn-theme-dark">Oscuro</button>
+            <button type="button" class="theme-btn" data-theme="light" id="btn-theme-light">Claro</button>
+            <button type="button" class="theme-btn" data-theme="sepia" id="btn-theme-sepia">Sepia</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <label class="setting-label" id="lbl-highlight">Color de adiciones</label>
+          <div class="color-options">
+            <button type="button" class="color-btn active" data-color="green" id="btn-color-green"><span class="color-dot green"></span> <span id="lbl-color-green">Verde</span></button>
+            <button type="button" class="color-btn" data-color="yellow" id="btn-color-yellow"><span class="color-dot yellow"></span> <span id="lbl-color-yellow">Amarillo</span></button>
+          </div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 2px 0;">
+
+        <div class="setting-row setting-row-inline">
+          <label class="setting-label" for="chk-autosave" id="lbl-autosave" style="cursor: pointer;">Autoguardado al editar</label>
+          <input type="checkbox" id="chk-autosave" style="cursor: pointer; accent-color: var(--accent); width: 16px; height: 16px;">
+        </div>
+
+        <div class="setting-row setting-row-inline">
+          <label class="setting-label" for="chk-autolock" id="lbl-autolock" style="cursor: pointer;">Bloqueo automático anti-IA</label>
+          <input type="checkbox" id="chk-autolock" checked style="cursor: pointer; accent-color: var(--accent); width: 16px; height: 16px;">
+        </div>
+      </div>
+    </header>
+
+    <!-- 80/20 Formatting Toolbar -->
+    <nav class="formatting-toolbar" id="formatting-toolbar" aria-label="Herramientas de formato">
+      <div class="toolbar-group">
+        <button type="button" class="tool-btn" id="tool-undo" title="Deshacer (Ctrl+Z)" disabled>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+          <span class="tool-label" id="tool-label-undo">Deshacer</span>
+          <span class="undo-counter" id="undo-counter" style="display: none;"><svg class="undo-chevron" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg><span id="undo-counter-num">0</span></span>
+        </button>
+        <button type="button" class="tool-btn" id="tool-redo" title="Rehacer (Ctrl+Y)" disabled>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+        </button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <button type="button" class="tool-btn" id="tool-bold" title="Negrita (Ctrl+B)"><b>B</b></button>
+        <button type="button" class="tool-btn" id="tool-italic" title="Cursiva (Ctrl+I)"><i>I</i></button>
+        <button type="button" class="tool-btn" id="tool-strike" title="Tachado"><s>S</s></button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <button type="button" class="tool-btn" id="tool-h1" title="Título Principal (H1)"><b>H1</b></button>
+        <button type="button" class="tool-btn" id="tool-h2" title="Subtítulo (H2)"><b>H2</b></button>
+        <button type="button" class="tool-btn" id="tool-h3" title="Sección (H3)"><b>H3</b></button>
+        <button type="button" class="tool-btn" id="tool-p" title="Párrafo normal">¶</button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <button type="button" class="tool-btn tool-btn-highlight" id="tool-checklist" title="Casilla de verificación / Tarea">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
+          <span class="tool-label" id="tool-label-checklist">Tarea</span>
+        </button>
+        <button type="button" class="tool-btn" id="tool-bullet" title="Lista de viñetas">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+          <span class="tool-label" id="tool-label-bullet">Lista</span>
+        </button>
+        <button type="button" class="tool-btn" id="tool-ordered" title="Lista numerada">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="21" y1="6" y2="6"/><line x1="10" x2="21" y1="12" y2="12"/><line x1="10" x2="21" y1="18" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+          <span class="tool-label" id="tool-label-ordered">1. Lista</span>
+        </button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <button type="button" class="tool-btn" id="tool-quote" title="Cita en bloque">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/></svg>
+          <span class="tool-label" id="tool-label-quote">Cita</span>
+        </button>
+        <button type="button" class="tool-btn" id="tool-code" title="Código">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span class="tool-label" id="tool-label-code">Código</span>
+        </button>
+        <button type="button" class="tool-btn" id="tool-hr" title="Separador horizontal">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="12" y2="12"/></svg>
+          <span class="tool-label" id="tool-label-hr">Línea</span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- Document Container (Always Visual & Directly Editable) -->
+  <main class="container">
+    <article class="markdown-body" id="markdown-content" contenteditable="true" spellcheck="true">
+      <p style="color: var(--text-muted); font-style: italic;">Cargando documento...</p>
+    </article>
+  </main>
+
+  <!-- Bottom Status Bar (Word & Line Counter) -->
+  <footer class="app-status-bar" id="app-status-bar">
+    <div class="status-bar-left">
+      <span class="doc-stats" id="doc-stats">0 palabras • 0 líneas</span>
+    </div>
+    <div class="status-bar-right">
+      <span class="status-meta">UTF-8</span>
+    </div>
+  </footer>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>
+    <span id="toast-msg">Notificación</span>
+  </div>
+
+  <!-- Vendors & Logic -->
+  <script src="/vendor/marked.min.js"></script>
+  <script src="/vendor/diff.min.js"></script>
+  <script src="/vendor/turndown.js"></script>
+  <script src="/vendor/turndown-plugin-gfm.js"></script>
+  <script src="/static/reader.js"></script>
+</body>
+</html>

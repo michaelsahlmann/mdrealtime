@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=SymbioLive
+GenericName=Markdown Environment for Human-AI Collaboration
+Comment=Real-time interactive Markdown editor and reader with live agent synchronization
+Exec=symbiolive %F
+Icon=symbiolive
+Terminal=false
+Type=Application
+Categories=Office;TextEditor;Development;
+MimeType=text/markdown;text/x-markdown;
+StartupWMClass=symbiolive

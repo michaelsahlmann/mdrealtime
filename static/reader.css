@@ -566,12 +566,29 @@ select.setting-select {
   max-width: var(--max-width);
   margin: 30px auto;
   padding: 0 24px 100px 24px;
+  cursor: text;
 }
 
 /* Visual Markdown Reading & Editing Styles */
 .markdown-body {
   outline: none;
   transition: min-height 0.2s;
+  min-height: calc(100vh - 220px);
+  cursor: text;
+  position: relative;
+}
+
+.markdown-body.is-empty::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: var(--text-muted);
+  opacity: 0.45;
+  pointer-events: none;
+  font-style: italic;
+  font-size: 1.05em;
+  user-select: none;
 }
 
 /* When in visual edit mode */

@@ -1,4 +1,4 @@
-# Bienvenido a SymbioLive
+# Bienvenido a MDRealtime
 
 Entorno de lectura y edición de Markdown diseñado para colaborar con agentes de inteligencia artificial.
 
@@ -20,4 +20,4 @@ Entorno de lectura y edición de Markdown diseñado para colaborar con agentes d
 - S: Abrir ajustes de tipografía, tamaño y ancho de lectura.
 
 Para abrir un documento desde la terminal:
-`symbiolive /ruta/al/documento.md`
+`mdrealtime /ruta/al/documento.md`

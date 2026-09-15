@@ -82,7 +82,8 @@
       toastRedo: 'Rehecho',
       closeApp: 'Cerrar',
       closeAppTooltip: 'Cerrar ventana (Ctrl+Q)',
-      confirmDiscardClose: 'Tienes cambios sin guardar. ¿Deseas cerrar de todas formas?'
+      confirmDiscardClose: 'Tienes cambios sin guardar. ¿Deseas cerrar de todas formas?',
+      placeholder: 'Escribe tu contenido aquí...'
     },
     'pt-BR': {
       markRead: 'Marcar como lido',
@@ -142,7 +143,8 @@
       toastRedo: 'Refeito',
       closeApp: 'Fechar',
       closeAppTooltip: 'Fechar janela (Ctrl+Q)',
-      confirmDiscardClose: 'Você tem alterações não salvas. Deseja fechar mesmo assim?'
+      confirmDiscardClose: 'Você tem alterações não salvas. Deseja fechar mesmo assim?',
+      placeholder: 'Comece a digitar aqui...'
     },
     'en-US': {
       markRead: 'Mark as read',
@@ -158,30 +160,30 @@
       savedIndicator: 'Saved',
       unsavedIndicator: 'Unsaved',
       noDocs: 'Open a Markdown file using the <b>+</b> button',
-      openFilePrompt: 'Absolute path of the Markdown file to open:',
+      openFilePrompt: 'Absolute path of Markdown file to open:',
       toastEditing: 'Editing: File protected against AI',
       toastSaved: 'Saved to disk. Unlocked for AI.',
-      toastRead: 'Marked as read. Base synchronized.',
+      toastRead: 'Marked as read. Baseline synced.',
       toastAiChanges: 'AI changes detected in ',
       toastAiChangesTab: 'AI changes in ',
-      toastAiDirtyWarning: 'Notice: AI updated the file while you had unsaved changes',
+      toastAiDirtyWarning: 'Warning: AI updated the file while you had unsaved changes',
       toastLockManualOn: 'File manually locked against AI',
       toastLockManualOff: 'File unlocked for AI',
       lblLang: 'Language & Dictionary',
       lblSpellcheck: 'Spellcheck',
-      lblFont: 'Typography',
-      lblFontSize: 'Font size',
-      lblWidth: 'Document width',
-      lblTheme: 'Visual theme',
-      lblHighlight: 'Highlight color',
+      lblFont: 'Font Family',
+      lblFontSize: 'Font Size',
+      lblWidth: 'Document Width',
+      lblTheme: 'Theme',
+      lblHighlight: 'Highlight Color',
       lblAutosave: 'Autosave while editing',
-      lblAutolock: 'Auto-lock against AI',
+      lblAutolock: 'Automatic anti-AI lock',
       themeDark: 'Dark',
       themeLight: 'Light',
       themeSepia: 'Sepia',
       colorGreen: 'Green',
       colorYellow: 'Yellow',
-      toastPathCopied: 'Full path copied to clipboard for other AIs',
+      toastPathCopied: 'Path copied to share with other AI',
       wordSingular: 'word',
       wordPlural: 'words',
       lineSingular: 'line',
@@ -202,7 +204,8 @@
       toastRedo: 'Redone',
       closeApp: 'Close',
       closeAppTooltip: 'Close window (Ctrl+Q)',
-      confirmDiscardClose: 'You have unsaved changes. Do you want to close anyway?'
+      confirmDiscardClose: 'You have unsaved changes. Do you want to close anyway?',
+      placeholder: 'Start typing here...'
     }
   };
 
@@ -388,6 +391,7 @@
     clearTimeout(historyTimer);
     tab.historyIndex--;
     docContainer.innerHTML = tab.history[tab.historyIndex];
+    updateEmptyState();
 
     tab.isDirty = true;
     updateSaveIndicator();
@@ -405,6 +409,7 @@
     clearTimeout(historyTimer);
     tab.historyIndex++;
     docContainer.innerHTML = tab.history[tab.historyIndex];
+    updateEmptyState();
 
     tab.isDirty = true;
     updateSaveIndicator();
@@ -514,8 +519,12 @@
 
   // Smart Markdown Diff Rendering
   function renderMarkdownWithDiff(baseText, newText) {
+    if (!newText || newText.trim() === '') {
+      return { html: '<p><br></p>', count: 0 };
+    }
     if (!baseText || baseText === newText || typeof Diff === 'undefined' || typeof marked === 'undefined') {
-      return { html: typeof marked !== 'undefined' ? marked.parse(newText || '') : newText, count: 0 };
+      const parsed = typeof marked !== 'undefined' ? marked.parse(newText || '') : newText;
+      return { html: parsed && parsed.trim() ? parsed : '<p><br></p>', count: 0 };
     }
 
     const diff = Diff.diffLines(baseText, newText);
@@ -619,7 +628,7 @@
     const tabData = tabs[path];
 
     fileNameEl.textContent = tabData.filename;
-    document.title = tabData.filename + ' - SymbioLive';
+    document.title = tabData.filename + ' - MDRealtime';
 
     if (pathChipText) {
       pathChipText.textContent = path;
@@ -691,6 +700,23 @@
     }
   }
 
+  // Handle empty document state & placeholder
+  function updateEmptyState() {
+    if (!docContainer) return;
+    const text = docContainer.innerText.replace(/\n/g, '').trim();
+    const hasElements = docContainer.querySelector('img, hr, table, pre, code, ul, ol, blockquote, h1, h2, h3, h4, h5, h6');
+    if (!text && !hasElements) {
+      docContainer.classList.add('is-empty');
+      docContainer.setAttribute('data-placeholder', t('placeholder'));
+      if (!docContainer.innerHTML || docContainer.innerHTML.trim() === '' || docContainer.innerHTML === '<br>') {
+        docContainer.innerHTML = '<p><br></p>';
+      }
+    } else {
+      docContainer.classList.remove('is-empty');
+      docContainer.removeAttribute('data-placeholder');
+    }
+  }
+
   // Render Document View (Always Visual & Directly Editable)
   function renderActiveDocument(preserveScroll = true) {
     if (!activePath || !tabs[activePath]) return;
@@ -699,8 +725,9 @@
     const scrollRatio = window.scrollY / (document.body.scrollHeight || 1);
     const result = renderMarkdownWithDiff(tab.baselineContent, tab.currentContent);
 
-    docContainer.innerHTML = result.html;
+    docContainer.innerHTML = (result.html && result.html.trim()) ? result.html : '<p><br></p>';
     tab.pendingCount = result.count;
+    updateEmptyState();
 
     // Enable interactive checkboxes rendered by marked
     docContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -854,6 +881,7 @@
     if (!activePath || !tabs[activePath]) return;
     const tab = tabs[activePath];
 
+    updateEmptyState();
     tab.isDirty = true;
     updateSaveIndicator();
     renderTabBar();
@@ -1170,7 +1198,20 @@
   // 80/20 Formatting Toolbar Actions
   function execFormat(command, value = null) {
     docContainer.focus();
+    if (!docContainer.innerHTML || docContainer.innerHTML.trim() === '' || docContainer.innerHTML === '<br>') {
+      docContainer.innerHTML = '<p><br></p>';
+      const p = docContainer.querySelector('p');
+      if (p) {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(p);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
     document.execCommand(command, false, value);
+    updateEmptyState();
     if (!activePath || !tabs[activePath]) return;
     const tab = tabs[activePath];
     tab.isDirty = true;
@@ -1186,10 +1227,14 @@
 
   function insertChecklist() {
     docContainer.focus();
+    if (!docContainer.innerHTML || docContainer.innerHTML.trim() === '' || docContainer.innerHTML === '<br>') {
+      docContainer.innerHTML = '<p><br></p>';
+    }
     const sel = window.getSelection();
     const text = (sel && sel.toString().trim()) || 'Nueva tarea';
     const html = `<ul class="task-list"><li class="task-list-item"><input type="checkbox" contenteditable="false"> ${text}</li></ul><p></p>`;
     document.execCommand('insertHTML', false, html);
+    updateEmptyState();
     if (!activePath || !tabs[activePath]) return;
     const tab = tabs[activePath];
     tab.isDirty = true;
@@ -1205,6 +1250,9 @@
 
   function insertCodeBlock() {
     docContainer.focus();
+    if (!docContainer.innerHTML || docContainer.innerHTML.trim() === '' || docContainer.innerHTML === '<br>') {
+      docContainer.innerHTML = '<p><br></p>';
+    }
     const sel = window.getSelection();
     const text = (sel && sel.toString()) || 'código';
     if (text.includes('\n')) {
@@ -1212,6 +1260,7 @@
     } else {
       document.execCommand('insertHTML', false, `<code>${text}</code>`);
     }
+    updateEmptyState();
     if (!activePath || !tabs[activePath]) return;
     const tab = tabs[activePath];
     tab.isDirty = true;
@@ -1225,8 +1274,43 @@
     }
   }
 
+  // Ensure empty editor has paragraph and placeholder on focus
+  docContainer.addEventListener('focus', () => {
+    if (!docContainer.innerHTML || docContainer.innerHTML.trim() === '' || docContainer.innerHTML === '<br>') {
+      docContainer.innerHTML = '<p><br></p>';
+      updateEmptyState();
+    }
+  });
+
+  // Delegate clicks on outer container margins to focus the editor
+  const mainContainer = document.querySelector('.container');
+  if (mainContainer) {
+    mainContainer.addEventListener('click', (e) => {
+      if (e.target === mainContainer) {
+        docContainer.focus();
+        if (!docContainer.innerText.trim()) {
+          if (!docContainer.querySelector('p')) {
+            docContainer.innerHTML = '<p><br></p>';
+          }
+          const p = docContainer.querySelector('p');
+          if (p) {
+            const range = document.createRange();
+            const sel = window.getSelection();
+            range.selectNodeContents(p);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+      }
+    });
+  }
+
   // Smart inline markdown checklist shortcut when typing [ ] or - [ ] followed by space
   docContainer.addEventListener('keyup', (e) => {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      updateEmptyState();
+    }
     if (e.key === ' ' || e.key === 'Spacebar') {
       const sel = window.getSelection();
       if (!sel || !sel.anchorNode) return;

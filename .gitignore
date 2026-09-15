@@ -29,6 +29,8 @@ ENV/
 
 # Runtime profiles and temporary files
 /tmp/symbiolive-*
+/tmp/mdrealtime-*
+*.session
 *.bak
 *.swp
 *.swo

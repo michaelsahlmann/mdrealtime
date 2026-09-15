@@ -1,13 +1,13 @@
 # Cross-platform implementation roadmap
 
-This document outlines the strategy for porting SymbioLive to macOS and Windows.
+This document outlines the strategy for porting MDRealtime to macOS and Windows.
 
 ## Current architecture on Linux
 
 The Linux version relies on three layers:
 
 1. Python backend. Runs a local HTTP daemon using Python's standard `http.server`, manages file polling at 150ms intervals, sets file permissions with `os.chmod`, and maintains Server-Sent Events connections.
-2. Chromium application mode. Launches Chrome, Chromium, or Brave with `--app=http://127.0.0.1:19842` and `--class=symbiolive`, isolating session data in a dedicated temporary profile.
+2. Chromium application mode. Launches Chrome, Chromium, or Brave with `--app=http://127.0.0.1:19842` and `--class=mdrealtime`, isolating session data in a dedicated temporary profile.
 3. Window manager communication. Focuses or closes windows through Hyprland commands (`hyprctl dispatch`).
 
 ## Phase 1: Python portable runner
@@ -26,7 +26,7 @@ The first cross-platform milestone maintains the Python daemon while replacing L
   tell application "Google Chrome" to activate
   ```
 - File permissions: macOS supports standard POSIX permissions (`chmod 0444` and `0644`), matching the Linux behavior directly.
-- Application bundle: Package the Python script and assets inside a standard `SymbioLive.app` directory structure with `Contents/MacOS` and `Contents/Resources`.
+- Application bundle: Package the Python script and assets inside a standard `MDRealtime.app` directory structure with `Contents/MacOS` and `Contents/Resources`.
 
 ### Windows adjustments
 

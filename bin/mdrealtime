@@ -1,0 +1,558 @@
+#!/usr/bin/env python3
+import sys
+import os
+import time
+import json
+import queue
+import urllib.request
+import urllib.error
+import shutil
+import threading
+import subprocess
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+# Resolve project base directory dynamically
+SCRIPT_PATH = os.path.realpath(__file__)
+SCRIPT_DIR = os.path.dirname(SCRIPT_PATH)
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+if os.path.exists(os.path.join(PROJECT_ROOT, "static", "index.html")):
+    BASE_DIR = PROJECT_ROOT
+elif os.path.exists(os.path.expanduser("~/.local/share/mdrealtime/static/index.html")):
+    BASE_DIR = os.path.expanduser("~/.local/share/mdrealtime")
+elif os.path.exists(os.path.expanduser("~/.local/share/symbiolive/static/index.html")):
+    BASE_DIR = os.path.expanduser("~/.local/share/symbiolive")
+elif os.path.exists("/usr/local/share/mdrealtime/static/index.html"):
+    BASE_DIR = "/usr/local/share/mdrealtime"
+else:
+    BASE_DIR = PROJECT_ROOT
+
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+VENDOR_DIR = os.path.join(BASE_DIR, "vendor")
+WELCOME_FILE = os.path.join(BASE_DIR, "assets", "welcome.md")
+if not os.path.exists(WELCOME_FILE):
+    WELCOME_FILE = os.path.join(BASE_DIR, "welcome.md")
+
+SERVER_PORT = int(os.environ.get("MDREALTIME_PORT", os.environ.get("SYMBIOLIVE_PORT", 19842)))
+BACKUP_DIR = os.path.expanduser("~/.local/share/mdrealtime/backups")
+
+open_files = {}
+open_files_lock = threading.Lock()
+locked_files = set()
+locked_files_lock = threading.Lock()
+clients = []
+clients_lock = threading.Lock()
+
+def read_file_safe(path):
+    if not os.path.exists(path):
+        return "# Archivo no encontrado\n\nEl archivo especificado no existe o fue movido."
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except Exception as e:
+        return f"# Error al leer archivo\n\n{e}"
+
+def register_file(path):
+    abs_path = os.path.abspath(path)
+    content = read_file_safe(abs_path)
+    mtime = 0
+    size = 0
+    try:
+        st = os.stat(abs_path)
+        mtime = st.st_mtime_ns
+        size = st.st_size
+    except Exception:
+        pass
+
+    with open_files_lock:
+        open_files[abs_path] = {
+            "mtime": mtime,
+            "size": size,
+            "content": content
+        }
+    return abs_path, content
+
+class ReaderHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+
+    def do_GET(self):
+        path = self.path.split("?")[0]
+
+        if path == "/" or path == "/index.html":
+            self.serve_file(os.path.join(STATIC_DIR, "index.html"), "text/html; charset=utf-8")
+        elif path == "/static/reader.css":
+            self.serve_file(os.path.join(STATIC_DIR, "reader.css"), "text/css; charset=utf-8")
+        elif path == "/static/reader.js":
+            self.serve_file(os.path.join(STATIC_DIR, "reader.js"), "application/javascript; charset=utf-8")
+        elif path == "/vendor/marked.min.js":
+            self.serve_file(os.path.join(VENDOR_DIR, "marked.min.js"), "application/javascript; charset=utf-8")
+        elif path == "/vendor/diff.min.js":
+            self.serve_file(os.path.join(VENDOR_DIR, "diff.min.js"), "application/javascript; charset=utf-8")
+        elif path == "/vendor/turndown.js":
+            self.serve_file(os.path.join(VENDOR_DIR, "turndown.js"), "application/javascript; charset=utf-8")
+        elif path == "/vendor/turndown-plugin-gfm.js":
+            self.serve_file(os.path.join(VENDOR_DIR, "turndown-plugin-gfm.js"), "application/javascript; charset=utf-8")
+        elif path == "/api/ping":
+            self.send_json({"status": "ok", "app": "mdrealtime"})
+        elif path == "/events":
+            self.handle_sse()
+        else:
+            self.send_error(404, "Not Found")
+
+    def do_POST(self):
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
+        try:
+            data = json.loads(body)
+        except Exception:
+            data = {}
+
+        if self.path == "/api/open":
+            req_path = data.get("path")
+            if not req_path:
+                self.send_json({"status": "error", "error": "Falta la ruta"}, 400)
+                return
+
+            abs_path = os.path.abspath(os.path.expanduser(req_path))
+            if not os.path.exists(abs_path):
+                self.send_json({"status": "error", "error": "El archivo no existe"}, 404)
+                return
+
+            abs_path, content = register_file(abs_path)
+
+            event_payload = json.dumps({
+                "type": "open_tab",
+                "path": abs_path,
+                "filename": os.path.basename(abs_path),
+                "content": content
+            })
+            with clients_lock:
+                for q in clients:
+                    q.put(event_payload)
+
+            self.send_json({"status": "ok", "path": abs_path})
+
+        elif self.path == "/api/lock":
+            file_path = data.get("path")
+            if not file_path:
+                self.send_json({"status": "error", "error": "Ruta requerida"}, 400)
+                return
+
+            abs_path = os.path.abspath(os.path.expanduser(file_path))
+            if not os.path.exists(abs_path):
+                self.send_json({"status": "error", "error": "No existe"}, 404)
+                return
+
+            try:
+                # Companion lock file
+                lock_file = f"{abs_path}.ai-locked"
+                with open(lock_file, "w", encoding="utf-8") as lf:
+                    lf.write(json.dumps({
+                        "locked": True,
+                        "by": "Michael (MDRealtime)",
+                        "status": "Editing in progress",
+                        "timestamp": time.time(),
+                        "warning": "NO EDITAR NI SOBREESCRIBIR: El usuario está editando este documento actualmente en MDRealtime."
+                    }, indent=2))
+
+                # Make file read-only on OS level (0o444)
+                os.chmod(abs_path, 0o444)
+                with locked_files_lock:
+                    locked_files.add(abs_path)
+
+                self.send_json({"status": "ok", "locked": True})
+            except Exception as e:
+                self.send_json({"status": "error", "error": str(e)}, 500)
+
+        elif self.path == "/api/unlock":
+            file_path = data.get("path")
+            if not file_path:
+                self.send_json({"status": "error", "error": "Ruta requerida"}, 400)
+                return
+
+            abs_path = os.path.abspath(os.path.expanduser(file_path))
+            try:
+                if os.path.exists(abs_path):
+                    os.chmod(abs_path, 0o644)
+
+                lock_file = f"{abs_path}.ai-locked"
+                if os.path.exists(lock_file):
+                    os.remove(lock_file)
+
+                with locked_files_lock:
+                    locked_files.discard(abs_path)
+
+                self.send_json({"status": "ok", "locked": False})
+            except Exception as e:
+                self.send_json({"status": "error", "error": str(e)}, 500)
+
+        elif self.path == "/api/save":
+            file_path = data.get("path")
+            new_content = data.get("content", "")
+
+            if not file_path:
+                self.send_json({"status": "error", "error": "Ruta requerida"}, 400)
+                return
+
+            abs_path = os.path.abspath(os.path.expanduser(file_path))
+            try:
+                if os.path.exists(abs_path):
+                    try:
+                        os.chmod(abs_path, 0o644)
+                    except Exception:
+                        pass
+
+                # Timestamped backup before overwriting
+                if os.path.exists(abs_path) and os.path.getsize(abs_path) > 0:
+                    try:
+                        os.makedirs(BACKUP_DIR, exist_ok=True)
+                        ts = time.strftime("%Y%m%d_%H%M%S")
+                        safe_name = os.path.basename(abs_path)
+                        backup_file = os.path.join(BACKUP_DIR, f"{safe_name}.{ts}.bak")
+                        shutil.copy2(abs_path, backup_file)
+                    except Exception:
+                        pass
+
+                with open(abs_path, "w", encoding="utf-8") as f:
+                    f.write(new_content)
+
+                st = os.stat(abs_path)
+                with open_files_lock:
+                    if abs_path in open_files:
+                        open_files[abs_path]["mtime"] = st.st_mtime_ns
+                        open_files[abs_path]["size"] = st.st_size
+                        open_files[abs_path]["content"] = new_content
+
+                lock_file = f"{abs_path}.ai-locked"
+                if os.path.exists(lock_file):
+                    try:
+                        os.remove(lock_file)
+                    except Exception:
+                        pass
+
+                with locked_files_lock:
+                    locked_files.discard(abs_path)
+
+                self.send_json({"status": "ok", "locked": False})
+            except Exception as e:
+                self.send_json({"status": "error", "error": str(e)}, 500)
+
+        elif self.path == "/api/close":
+            file_path = data.get("path")
+            if file_path:
+                abs_path = os.path.abspath(os.path.expanduser(file_path))
+                try:
+                    if os.path.exists(abs_path):
+                        os.chmod(abs_path, 0o644)
+                    lock_file = f"{abs_path}.ai-locked"
+                    if os.path.exists(lock_file):
+                        os.remove(lock_file)
+                except Exception:
+                    pass
+
+                with locked_files_lock:
+                    locked_files.discard(abs_path)
+                with open_files_lock:
+                    open_files.pop(abs_path, None)
+
+            self.send_json({"status": "ok"})
+
+        elif self.path == "/api/exit":
+            with locked_files_lock:
+                for p in list(locked_files):
+                    try:
+                        if os.path.exists(p):
+                            os.chmod(p, 0o644)
+                        lock_file = f"{p}.ai-locked"
+                        if os.path.exists(lock_file):
+                            os.remove(lock_file)
+                    except Exception:
+                        pass
+                locked_files.clear()
+
+            self.send_json({"status": "ok"})
+
+            def _exit():
+                time.sleep(0.2)
+                for cls in ["mdrealtime", "symbiolive"]:
+                    try:
+                        subprocess.run(["hyprctl", "dispatch", "closewindow", f"class:{cls}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                    except Exception:
+                        pass
+                try:
+                    subprocess.run(["hyprctl", "dispatch", "closewindow", "title:.*MDRealtime.*"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                except Exception:
+                    pass
+            threading.Thread(target=_exit, daemon=True).start()
+
+        else:
+            self.send_error(404, "Not Found")
+
+    def send_json(self, obj, code=200):
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps(obj).encode("utf-8"))
+
+    def serve_file(self, file_path, content_type):
+        if not os.path.exists(file_path):
+            self.send_error(404, f"File not found: {file_path}")
+            return
+        try:
+            with open(file_path, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self.send_error(500, str(e))
+
+    def handle_sse(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+
+        client_queue = queue.Queue()
+        with clients_lock:
+            clients.append(client_queue)
+
+        try:
+            with open_files_lock:
+                current_items = list(open_files.items())
+
+            for path, info in current_items:
+                initial_payload = json.dumps({
+                    "type": "open_tab",
+                    "path": path,
+                    "filename": os.path.basename(path),
+                    "content": info["content"]
+                })
+                self.wfile.write(f"data: {initial_payload}\n\n".encode("utf-8"))
+            self.wfile.flush()
+
+            while True:
+                try:
+                    event_data = client_queue.get(timeout=15)
+                    self.wfile.write(f"data: {event_data}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                except queue.Empty:
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            with clients_lock:
+                if client_queue in clients:
+                    clients.remove(client_queue)
+
+def watch_all_files():
+    while True:
+        time.sleep(0.15)
+        with open_files_lock:
+            tracked_paths = list(open_files.keys())
+
+        for path in tracked_paths:
+            if not os.path.exists(path):
+                continue
+
+            try:
+                st = os.stat(path)
+                mtime = st.st_mtime_ns
+                size = st.st_size
+
+                with open_files_lock:
+                    if path not in open_files:
+                        continue
+                    cached = open_files[path]
+
+                if mtime != cached["mtime"] or size != cached["size"]:
+                    new_content = read_file_safe(path)
+                    
+                    if new_content != cached["content"]:
+                        with open_files_lock:
+                            if path in open_files:
+                                open_files[path]["mtime"] = mtime
+                                open_files[path]["size"] = size
+                                open_files[path]["content"] = new_content
+
+                        event_payload = json.dumps({
+                            "type": "file_update",
+                            "path": path,
+                            "filename": os.path.basename(path),
+                            "content": new_content,
+                            "timestamp": time.time()
+                        })
+                        with clients_lock:
+                            for q in clients:
+                                q.put(event_payload)
+            except Exception:
+                pass
+
+def is_instance_running():
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{SERVER_PORT}/api/ping", method="GET")
+        with urllib.request.urlopen(req, timeout=0.8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("status") == "ok"
+    except Exception:
+        return False
+
+def open_in_existing_instance(file_path):
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{SERVER_PORT}/api/open",
+            data=json.dumps({"path": file_path}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data.get("status") == "ok":
+                for cls in ["mdrealtime", "symbiolive"]:
+                    subprocess.run(["hyprctl", "dispatch", "focuswindow", f"class:{cls}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["hyprctl", "dispatch", "focuswindow", "title:.*MDRealtime.*"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return True
+    except Exception as e:
+        print(f"Error comunicando con instancia existente: {e}")
+    return False
+
+def main():
+    target_file = None
+    if len(sys.argv) > 1 and sys.argv[1].strip():
+        target_file = os.path.abspath(sys.argv[1])
+    else:
+        target_file = WELCOME_FILE
+
+    if not os.path.exists(target_file):
+        print(f"Error: El archivo no existe: {target_file}")
+        sys.exit(1)
+
+    # Check if instance is already running
+    if is_instance_running():
+        if open_in_existing_instance(target_file):
+            print(f"[MDRealtime] Abierto en pestaña existente: {os.path.basename(target_file)}")
+            sys.exit(0)
+
+    # Register initial file
+    register_file(target_file)
+
+    # Start file watcher thread
+    watcher_thread = threading.Thread(target=watch_all_files, daemon=True)
+    watcher_thread.start()
+
+    # Start HTTP Server
+    ThreadingHTTPServer.allow_reuse_address = True
+    server = ThreadingHTTPServer(("127.0.0.1", SERVER_PORT), ReaderHandler)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
+    app_url = f"http://127.0.0.1:{SERVER_PORT}/"
+
+    # Locate desktop browser binary
+    browser_bin = None
+    for b in ["google-chrome-stable", "chromium", "google-chrome", "brave", "microsoft-edge-stable"]:
+        cand = shutil.which(b)
+        if cand:
+            browser_bin = cand
+            break
+
+    profile_dir = f"/tmp/mdrealtime-profile-{os.getuid()}"
+    os.makedirs(profile_dir, exist_ok=True)
+    dict_dir = os.path.join(profile_dir, "Dictionaries")
+    os.makedirs(dict_dir, exist_ok=True)
+
+    # Synchronize offline dictionaries (es-ES, es-419, pt-BR, en-US)
+    chrome_dict_dir = os.path.expanduser("~/.config/google-chrome/Dictionaries")
+    if os.path.exists(chrome_dict_dir):
+        for fname in os.listdir(chrome_dict_dir):
+            if fname.endswith(".bdic"):
+                src = os.path.join(chrome_dict_dir, fname)
+                dst = os.path.join(dict_dir, fname)
+                if not os.path.exists(dst):
+                    try:
+                        shutil.copy2(src, dst)
+                    except Exception:
+                        pass
+        es_src = os.path.join(dict_dir, "es-ES-3-0.bdic")
+        es_419 = os.path.join(dict_dir, "es-419-3-0.bdic")
+        if os.path.exists(es_src) and not os.path.exists(es_419):
+            try:
+                shutil.copy2(es_src, es_419)
+            except Exception:
+                pass
+
+    # Ensure spellcheck dictionaries configured
+    default_dir = os.path.join(profile_dir, "Default")
+    os.makedirs(default_dir, exist_ok=True)
+    pref_file = os.path.join(default_dir, "Preferences")
+    try:
+        pdata = {}
+        if os.path.exists(pref_file):
+            with open(pref_file, "r", encoding="utf-8") as pf:
+                pdata = json.load(pf)
+        if "spellcheck" not in pdata:
+            pdata["spellcheck"] = {}
+        pdata["spellcheck"]["dictionaries"] = ["es-419", "es-ES", "pt-BR", "en-US"]
+        pdata["spellcheck"]["dictionary"] = "es-419"
+        with open(pref_file, "w", encoding="utf-8") as pf:
+            json.dump(pdata, pf)
+    except Exception:
+        pass
+
+    if browser_bin:
+        cmd = [
+            browser_bin,
+            f"--app={app_url}",
+            f"--class=mdrealtime",
+            f"--user-data-dir={profile_dir}",
+            "--no-first-run",
+            "--no-default-browser-check"
+        ]
+        try:
+            subprocess.Popen(cmd)
+        except Exception:
+            subprocess.Popen(["xdg-open", app_url])
+    else:
+        subprocess.Popen(["xdg-open", app_url])
+
+    # Keep server alive based on connected clients
+    try:
+        idle_seconds = 0
+        has_connected_once = False
+        while True:
+            time.sleep(1)
+            with clients_lock:
+                active_count = len(clients)
+
+            if active_count > 0:
+                has_connected_once = True
+                idle_seconds = 0
+            else:
+                idle_seconds += 1
+                limit = 25 if not has_connected_once else 15
+                if idle_seconds >= limit:
+                    break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+        with locked_files_lock:
+            for p in locked_files:
+                try:
+                    if os.path.exists(p):
+                        os.chmod(p, 0o644)
+                    lock_file = f"{p}.ai-locked"
+                    if os.path.exists(lock_file):
+                        os.remove(lock_file)
+                except Exception:
+                    pass
+
+if __name__ == "__main__":
+    main()

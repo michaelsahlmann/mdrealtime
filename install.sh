@@ -12,15 +12,18 @@ mkdir -p "${BIN_DIR}" "${APP_DIR}" "${ICON_DIR}"
 
 # 1. Enlace ejecutable en ~/.local/bin
 ln -sf "${REPO_DIR}/bin/mdrealtime" "${BIN_DIR}/mdrealtime"
-ln -sf "${REPO_DIR}/bin/mdrealtime" "${BIN_DIR}/symbiolive"
 chmod +x "${REPO_DIR}/bin/mdrealtime"
+
+# Limpieza de binario antiguo si existía
+rm -f "${BIN_DIR}/symbiolive"
 
 # 2. Copiar icono de la aplicación
 cp "${REPO_DIR}/assets/icon.svg" "${ICON_DIR}/mdrealtime.svg"
-cp "${REPO_DIR}/assets/icon.svg" "${ICON_DIR}/symbiolive.svg"
+rm -f "${ICON_DIR}/symbiolive.svg"
 
-# 3. Instalar entrada de escritorio
+# 3. Instalar entrada de escritorio y limpiar antigua
 cp "${REPO_DIR}/assets/mdrealtime.desktop" "${APP_DIR}/mdrealtime.desktop"
+rm -f "${APP_DIR}/symbiolive.desktop"
 
 # 4. Actualizar base de datos de escritorio si existe el comando
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -31,4 +34,4 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -f -t "${HOME}/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 fi
 
-echo "Instalación completada. Comando disponible: mdrealtime (y symbiolive)"
+echo "Instalación completada. Comando disponible: mdrealtime"
